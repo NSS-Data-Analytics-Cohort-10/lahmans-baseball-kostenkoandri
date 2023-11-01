@@ -1,25 +1,3 @@
--- exploratory selects
-select * from people where playerid ='alvarpe01';
-select * from managershalf;
-select * from salaries;
-select * from managers;
-select * from teams;
-select * from teamshalf;
-select * from appearances;
-select * from fieldingofsplit;
-select * from fieldingof;
-select * from fielding;
-select * from pitching;
-select * from batting;
-select * from halloffame;
-select * from awardsshareplayers;
-select * from awardsplayers;
-select * from awardsmanagers;
-select * from allstarfull;
-select * from collegeplaying;
-select * from schools;
-
--- questions
 -- **Initial Questions**
 
 -- 1. What range of years for baseball games played does the provided database cover? 
@@ -39,7 +17,7 @@ from homegames;
 		from people)
 
 -- 3. Find all players in the database who played at Vanderbilt University. Create a list showing each player’s first and last names as well as the total salary they earned in the major leagues. Sort this list in descending order by the total salary earned. Which Vanderbilt player earned the most money in the majors?
-
+-- "David"	"Price"	"Vanderbilt University"	"$245,553,888.00"
 
 -- need to check if all of the salary years were in major leage
 
@@ -51,35 +29,39 @@ select distinct playerid,
 from people
 join collegeplaying using(playerid)
 join schools using(schoolid)
-left join salaries s using(playerid)
+join salaries s using(playerid)
 where schoolname = 'Vanderbilt University'
 group by playerid, namefirst, namelast, schoolname
 order by total_salary desc;
 
-select * from schools where schoolname ilike '%vanderbilt%';
-select * from salaries where playerid = 'embresl01'
-
--- 4. Using the fielding table, group players into three groups based on their position: label players with position OF as "Outfield", those with position "SS", "1B", "2B", and "3B" as "Infield", and those with position "P" or "C" as "Battery". Determine the number of putouts made by each of these three groups in 2016.
+-- 4. Using the fielding table, group players into three groups based on their position: label players with position OF as "Outfield", those with position "SS", "1B", "2B", and "3B" as "Infield", and those with position "P" or "C" as "Battery". !! Determine the number of putouts made by each of these three groups in 2016. !!
+-- "Outfield"	29560
+-- "Battery"	49993
+-- "Infield"	50365
 with cte as (
 select playerid,
 	po,
+	yearid,
 	case
 		when pos = 'OF' then 'Outfield'
 		when pos in ('SS', '1B', '3B') then 'Infield'
 		else 'Battery'
 	end as position_group
-	
-from fielding)
+from fielding),
+cte2 as (
 select playerid,
-position_group,
-sum(po) over(partition by position_group)
+	yearid,
+	position_group,
+--sum(po) over(partition by position_group)
+	po
 from cte
-order by playerid
+order by playerid)
+select position_group, sum(po)
+from cte2
+where yearid = 2016
+group by position_group
 ;
 
-   select playerid, count(playerid) from fielding
-   group by playerid
-   order by playerid;
 -- 5. Find the average number of strikeouts per game by decade since 1920. Round the numbers you report to 2 decimal places. Do the same for home runs per game. Do you see any trends?
    select
    floor(yearid/10)*10 as decade,
@@ -91,19 +73,23 @@ order by playerid
    
 
 -- 6. Find the player who had the most success stealing bases in 2016, where __success__ is measured as the percentage of stolen base attempts which are successful. (A stolen base attempt results either in a stolen base or being caught stealing.) Consider only players who attempted _at least_ 20 stolen bases.
+-- "owingch01"	"Chris"	"Owings"	23	91.30
 select playerid,
+	namefirst,
+	namelast,
 	sb + cs as stolen_base_attempts,
 	case when sb != 0 then round(sb::numeric / (sb + cs) * 100, 2)
 	else 0 end as percentage_of_sb_success
 	
 from batting
-where yearid = 2016
-order by sb desc;
+join people using(playerid)
+where yearid = 2016 and sb >= 20
+order by percentage_of_sb_success desc;
 
-select * from batting
 
 -- 7.  From 1970 – 2016, what is the largest number of wins for a team that did not win the world series? What is the smallest number of wins for a team that did win the world series? Doing this will probably result in an unusually small number of wins for a world series champion – determine why this is the case. Then redo your query, excluding the problem year. How often from 1970 – 2016 was it the case that a team with the most wins also won the world series? What percentage of the time?
 -- 1981 was split season
+
 (select teamid, W, WSWin, yearid
 from teams
 where yearid between 1970 and 2016
@@ -120,11 +106,7 @@ where yearid between 1970 and 2016
 order by W asc
 limit 1);
 
--- SELECT yearid, teamid, w, (
--- select max(w) from teams where wswin = 'N' and yearid = t.yearid) as most_wins
--- from teams t
--- where WSWin = 'Y'
--- order by yearid;
+------------------------------------------
 with cte as (
 	select yearid, max(w) as max_wins
 	from teams
@@ -150,7 +132,6 @@ from cte2 where w = max_wins;
 select * from teams where yearid = 1981
 
 -- 8. Using the attendance figures from the homegames table, find the teams and parks which had the top 5 average attendance per game in 2016 (where average attendance is defined as total attendance divided by number of games). Only consider parks where there were at least 10 games played. Report the park name, team name, and average attendance. Repeat for the lowest 5 average attendance.
-select * from homegames;
 
 with highest_attendance as (select year, team,
 	park,
@@ -182,6 +163,22 @@ order by att_per_game;
 	
 
 -- 9. Which managers have won the TSN Manager of the Year award in both the National League (NL) and the American League (AL)? Give their full name and the teams that they were managing when they won the award.
+-- "Davey Johnson"
+-- "Jim Leyland"
+select a.playerid,
+	p.namefirst || ' ' || p.namelast as full_name,
+	yearid,
+	teamid
+from awardsmanagers a
+join people p using(playerid)
+join managers m using(playerid, yearid)
+where a.awardid = 'TSN Manager of the Year'
+	and a.lgid = 'AL' and playerid in (
+	select aw.playerid
+	from awardsmanagers aw
+	where aw.awardid = 'TSN Manager of the Year'
+	and aw.lgid = 'NL')
+union all
 select a.playerid,
 	p.namefirst || ' ' || p.namelast as full_name,
 	yearid,
@@ -196,6 +193,30 @@ where a.awardid = 'TSN Manager of the Year'
 	where aw.awardid = 'TSN Manager of the Year'
 	and aw.lgid = 'AL');
 
-
-select * from managers
 -- 10. Find all players who hit their career highest number of home runs in 2016. Consider only players who have played in the league for at least 10 years, and who hit at least one home run in 2016. Report the players' first and last names and the number of home runs they hit in 2016.
+with cte_batting as (select playerid,
+	yearid,
+	hr,
+	max(hr) over(partition by playerid) max_hr
+from batting
+where hr > 0 and playerid in
+	(
+		select playerid
+		from batting
+		group by playerid having count(distinct yearid) >= 10 order by playerid ))
+
+select playerid, namefirst || ' ' || namelast as full_name, hr
+from cte_batting
+join people using(playerid)
+where yearid = 2016 and hr = max_hr
+order by hr desc;
+
+-- Open-ended questions
+
+-- Is there any correlation between number of wins and team salary? Use data from 2000 and later to answer this question. As you do this analysis, keep in mind that salaries across the whole league tend to increase together, so you may want to look on a year-by-year basis.
+
+-- In this question, you will explore the connection between number of wins and attendance.
+
+-- Does there appear to be any correlation between attendance at home games and number of wins?
+-- Do teams that win the world series see a boost in attendance the following year? What about teams that made the playoffs? Making the playoffs means either being a division winner or a wild card winner.
+-- It is thought that since left-handed pitchers are more rare, causing batters to face them less often, that they are more effective. Investigate this claim and present evidence to either support or dispute this claim. First, determine just how rare left-handed pitchers are compared with right-handed pitchers. Are left-handed pitchers more likely to win the Cy Young Award? Are they more likely to make it into the hall of fame?
