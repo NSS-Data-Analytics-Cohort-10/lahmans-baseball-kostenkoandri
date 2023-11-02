@@ -6,15 +6,20 @@ select min(year),
 	max(year)
 from homegames;
 -- 2. Find the name and height of the shortest player in the database. How many games did he play in? What is the name of the team for which he played?
--- Eddie Gaedel: 43 inches
+-- Eddie Gaedel: 43 inches, 1 game for St. Louis Browns
    select playerid, 
    		namefirst,
 		namelast,
-		height
+		height,
+		g_all as number_of_games,
+		teamid,
+		name
 	from people
+	join appearances using(playerid)
+	join teams using(teamid, yearid)
 	where height = (
 		select min(height)
-		from people)
+		from people);
 
 -- 3. Find all players in the database who played at Vanderbilt University. Create a list showing each player’s first and last names as well as the total salary they earned in the major leagues. Sort this list in descending order by the total salary earned. Which Vanderbilt player earned the most money in the majors?
 -- "David"	"Price"	"Vanderbilt University"	"$245,553,888.00"
@@ -44,7 +49,7 @@ select playerid,
 	yearid,
 	case
 		when pos = 'OF' then 'Outfield'
-		when pos in ('SS', '1B', '3B') then 'Infield'
+		when pos in ('SS', '1B', '2B', '3B') then 'Infield'
 		else 'Battery'
 	end as position_group
 from fielding),
@@ -59,13 +64,15 @@ order by playerid)
 select position_group, sum(po)
 from cte2
 where yearid = 2016
-group by position_group
-;
+group by position_group;
 
 -- 5. Find the average number of strikeouts per game by decade since 1920. Round the numbers you report to 2 decimal places. Do the same for home runs per game. Do you see any trends?
+	--should i devide sum(G) by 2?
    select
    floor(yearid/10)*10 as decade,
-   sum(so) / sum(G) as avg_so_per_game --should I divide by homegames instead since it will give an actual number of games??
+   round(sum(so) / sum(G)::numeric, 2) as avg_so_per_game,
+   round(sum(hr) / sum(G)::numeric, 2) as avg_hr_per_game
+   --should I divide by homegames instead since it will give an actual number of games??
    from teams
    where yearid >= 1920
    group by decade
@@ -90,7 +97,7 @@ order by percentage_of_sb_success desc;
 -- 7.  From 1970 – 2016, what is the largest number of wins for a team that did not win the world series? What is the smallest number of wins for a team that did win the world series? Doing this will probably result in an unusually small number of wins for a world series champion – determine why this is the case. Then redo your query, excluding the problem year. How often from 1970 – 2016 was it the case that a team with the most wins also won the world series? What percentage of the time?
 -- 1981 was split season
 
-(select teamid, W, WSWin, yearid
+(select teamid, name, W, WSWin, yearid
 from teams
 where yearid between 1970 and 2016
 	and WSWin = 'N'
@@ -98,7 +105,7 @@ where yearid between 1970 and 2016
 order by W desc
 limit 1)
 union
-(select teamid, W, WSWin, yearid
+(select teamid, name, W, WSWin, yearid
 from teams
 where yearid between 1970 and 2016
 	and WSWin = 'Y'
@@ -161,7 +168,6 @@ from lowest_attendance h
 left join parks p using(park)
 order by att_per_game;
 	
-
 -- 9. Which managers have won the TSN Manager of the Year award in both the National League (NL) and the American League (AL)? Give their full name and the teams that they were managing when they won the award.
 -- "Davey Johnson"
 -- "Jim Leyland"
@@ -200,11 +206,9 @@ with cte_batting as (select playerid,
 	max(hr) over(partition by playerid) max_hr
 from batting
 where hr > 0 and playerid in
-	(
-		select playerid
+	(select playerid
 		from batting
 		group by playerid having count(distinct yearid) >= 10 order by playerid ))
-
 select playerid, namefirst || ' ' || namelast as full_name, hr
 from cte_batting
 join people using(playerid)
@@ -213,10 +217,11 @@ order by hr desc;
 
 -- Open-ended questions
 
--- Is there any correlation between number of wins and team salary? Use data from 2000 and later to answer this question. As you do this analysis, keep in mind that salaries across the whole league tend to increase together, so you may want to look on a year-by-year basis.
+-- 11. Is there any correlation between number of wins and team salary? Use data from 2000 and later to answer this question. As you do this analysis, keep in mind that salaries across the whole league tend to increase together, so you may want to look on a year-by-year basis.
 
--- In this question, you will explore the connection between number of wins and attendance.
+
+-- 12. In this question, you will explore the connection between number of wins and attendance.
 
 -- Does there appear to be any correlation between attendance at home games and number of wins?
 -- Do teams that win the world series see a boost in attendance the following year? What about teams that made the playoffs? Making the playoffs means either being a division winner or a wild card winner.
--- It is thought that since left-handed pitchers are more rare, causing batters to face them less often, that they are more effective. Investigate this claim and present evidence to either support or dispute this claim. First, determine just how rare left-handed pitchers are compared with right-handed pitchers. Are left-handed pitchers more likely to win the Cy Young Award? Are they more likely to make it into the hall of fame?
+-- 13. It is thought that since left-handed pitchers are more rare, causing batters to face them less often, that they are more effective. Investigate this claim and present evidence to either support or dispute this claim. First, determine just how rare left-handed pitchers are compared with right-handed pitchers. Are left-handed pitchers more likely to win the Cy Young Award? Are they more likely to make it into the hall of fame?
